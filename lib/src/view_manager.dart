@@ -31,7 +31,7 @@ class ViewManager {
 
   factory ViewManager.attach(DocxManager docxMan,
       {TagPolicy tagPolicy = TagPolicy.saveText,
-      ImagePolicy imgPolicy = ImagePolicy.save}) {
+      ImagePolicy imgPolicy = ImagePolicy.remove}) {
     final root =
         View(XmlName('root'), const [], const [], false, '', null, [], null);
     final numbering = Numbering.from(docxMan);

@@ -1,134 +1,83 @@
 part of docx_view;
 
-typedef bool Check(XmlElement n);
-typedef void OnFound(XmlElement e);
+typedef Check = bool Function(XmlElement n);
+typedef OnFound = void Function(XmlElement e);
 
-class SdtView {
+class View<T extends Content?> extends XmlElement {
+  Map<String, List<View>>? sub;
+  final SdtView? sdtView;
   final String tag;
-  final String name;
-  final XmlElement content;
-  final XmlElement sdt;
-  SdtView(this.tag, this.name, this.content, this.sdt);
-  factory SdtView.parse(XmlElement e) {
-    if (e.name.local == "sdt") {
-      XmlElement sdt = e;
-      XmlElement sdtPr = View._findChild(sdt, "sdtPr");
-      if (sdtPr != null) {
-        XmlElement alias = View._findChild(sdtPr, "alias");
-        XmlElement tag = View._findChild(sdtPr, "tag");
-        if (alias != null && tag != null) {
-          XmlElement content = View._findChild(sdt, "sdtContent");
-          if (content != null) {
-            XmlAttribute aliasAttr = View._findAttr(alias, "val");
-            XmlAttribute tagAttr = View._findAttr(tag, "val");
-            if (aliasAttr != null && tagAttr != null) {
-              return SdtView(tagAttr.value, aliasAttr.value, content, sdt);
-            }
-          }
-        }
-      }
-    }
-    return null;
-  }
-}
-
-class View<T extends Content> extends XmlElement {
-  Map<String, List<View>> sub;
-  final sdtView;
-  final String tag;
-  View(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  final List<View> childrensView;
+  final View? parentView;
+  View(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       this.tag,
-      this.sdtView])
+      this.sdtView,
+      this.childrensView,
+      this.parentView)
       : super(name, attributesIterable, children, isSelfClosing);
 
-  View createNew(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  View createNew(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView]) {
-    return null;
-  }
-
-  static traverse(XmlElement node, Check check, OnFound onFound) {
-    if (node.children != null && node.children.isNotEmpty) {
-      for (var c in node.children) {
-        if (c is XmlElement) {
-          if (check(c)) {
-            onFound(c);
-          } else {
-            traverse(c, check, onFound);
-          }
-        }
-      }
-    }
-  }
-
-  static List<View> subViews(XmlElement e) {
-    List<View> views = List();
-    traverse(e, (test) => test is View, (e) => views.add(e));
-    return views;
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView) {
+    return View(name, attributesIterable, children, isSelfClosing, tag, sdtView,
+        childrensView, parentView);
   }
 
   List<XmlElement> produce(ViewManager vm, T c) {
     return [];
   }
 
-  static void replaceWithAll(
-      XmlElement elem, List<XmlElement> to, bool clearParents,
-      {SdtView insertBetween}) {
-    if (clearParents) {
-      for (XmlElement e in to) {
-        if (e.parent != null) {
-          e.parent.children.remove(e);
-        }
-      }
-    }
-    if (insertBetween != null) {
-      insertBetween.content.children.addAll(to);
-    }
-    if (elem.parent != null) {
-      // Root elem not have parents
-      var childs = elem.parent.children;
-      var index = childs.indexOf(elem);
-      childs.removeAt(index);
-      if (insertBetween != null) {
-        childs.insert(index, insertBetween.sdt);
-      } else {
-        childs.insertAll(index, to);
-      }
-    }
-  }
-
-  static XmlElement _findChild(XmlElement e, String tag) {
-    return e.descendants.firstWhere(
-        (test) => test is XmlElement && test.name.local == tag,
-        orElse: () => null);
-  }
-
-  static XmlAttribute _findAttr(XmlElement e, String attr) {
-    return e.attributes
-        .firstWhere((test) => test.name.local == attr, orElse: () => null);
+  static XmlAttribute? _findAttr(XmlElement e, String attr) {
+    return e.attributes.firstWhereOrNull((test) => test.name.local == attr);
   }
 }
 
-class TextView extends View<TextContent> {
-  TextView(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+class TextView extends View<TextContent?> {
+  TextView(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView])
-      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView)
+      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView,
+            childrensView, parentView);
 
   @override
-  List<XmlElement> produce(ViewManager vm, TextContent c) {
-    XmlElement copy = this.accept(vm._copyVisitor);
+  List<XmlElement> produce(ViewManager vm, TextContent? c) {
+    XmlElement copy = XmlCopyVisitor().visitElement(this)!;
     final r = findR(copy);
-    if (r != null && c != null && c.text != null) {
+    final pr = copy.descendants.firstWhereOrNull(
+        (e) => e is XmlElement && e.name.local == 'hyperlink');
+    if (pr != null) {
+      final idAttr = pr.getAttribute('r:id');
+
+      final docRels = vm.docxManager
+          .getEntry(() => DocxRelsEntry(), 'word/_rels/document.xml.rels');
+      if (idAttr != null && docRels != null) {
+        final rel = docRels.getRel(idAttr);
+        if (rel != null) {
+          if (c != null) {
+            rel.target = (c as HyperlinkContent).url;
+            docRels.update(idAttr, rel);
+          }
+        }
+      }
+    }
+
+    if (r != null && c != null) {
       _removeRSiblings(r);
       _updateRText(vm, r, c.text);
     }
@@ -136,52 +85,48 @@ class TextView extends View<TextContent> {
   }
 
   @override
-  TextView createNew(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  TextView createNew(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView]) {
-    return TextView(
-        name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView) {
+    return TextView(name, attributesIterable, children, isSelfClosing, tag,
+        sdtView, childrensView, parentView);
   }
 
-  XmlElement findR(XmlElement src) =>
-      src.descendants.firstWhere((e) => e is XmlElement && e.name.local == 'r');
+  XmlElement? findR(XmlElement src) => src.descendants
+          .firstWhereOrNull((e) => e is XmlElement && e.name.local == 'r')
+      as XmlElement?;
 
   void _removeRSiblings(XmlElement sib) {
     final parent = sib.parent;
 
-    XmlElement next = sib.nextSibling;
+    XmlElement? next = sib.nextSibling as XmlElement?;
     while (next != null) {
       final laterNext = next.nextSibling;
       if (next.name.local == 'r') {
-        parent.children.remove(next);
+        parent!.children.remove(next);
       }
-      next = laterNext;
+      next = laterNext as XmlElement?;
     }
 
-    XmlElement prev = sib.previousSibling;
+    XmlElement? prev = sib.previousSibling as XmlElement?;
     while (prev != null) {
       final laterPrev = prev.previousSibling;
       if (prev.name.local == 'r') {
-        parent.children.remove(prev);
+        parent!.children.remove(prev);
       }
-      prev = laterPrev;
+      prev = laterPrev as XmlElement?;
     }
-  }
-
-  List<XmlElement> _makeTCopies(ViewManager vm, XmlElement t, int totalCount) {
-    final tCopies = <XmlElement>[];
-    for (var i = 0; i < totalCount; i++) {
-      tCopies.add(t.accept(vm._copyVisitor));
-    }
-    return tCopies;
   }
 
   XmlElement _brElement() => XmlElement(XmlName('br', 'w'));
 
-  void _updateRText(ViewManager vm, XmlElement r, String text) {
+  void _updateRText(ViewManager vm, XmlElement r, String? text) {
     final tIndex =
         r.children.indexWhere((e) => e is XmlElement && e.name.local == 't');
     if (tIndex >= 0) {
@@ -196,65 +141,76 @@ class TextView extends View<TextContent> {
             t.children[0] = XmlText(l);
           } else {
             // Make T tag copy and add to R
-            final XmlElement tCp = t.accept(vm._copyVisitor);
+            final XmlElement tCp =
+                XmlCopyVisitor().visitElement(t as XmlElement)!;
             tCp.children[0] = XmlText(l);
             r.children.insert(pasteIndex++, tCp);
           }
           r.children.insert(pasteIndex++, _brElement());
         }
       } else {
-        t.children[0] = XmlText(text);
+        t.children[0] = XmlText(text!);
       }
     }
   }
 }
 
-class PlainView extends View<PlainContent> {
-  PlainView(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+class PlainView extends View<PlainContent?> {
+  PlainView(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView])
-      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView)
+      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView,
+            childrensView, parentView);
   @override
-  List<XmlElement> produce(ViewManager vm, PlainContent c) {
-    XmlElement copy = this.accept(vm._copyVisitor);
-    var views = View.subViews(copy);
-    for (var v in views) {
+  List<XmlElement> produce(ViewManager vm, PlainContent? c) {
+    View copy = XmlCopyVisitor().visitElement(this) as View;
+    for (var v in copy.childrensView) {
       vm._produceInner(c, v);
     }
     return List.from(copy.children);
   }
 
   @override
-  PlainView createNew(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  PlainView createNew(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView]) {
-    return PlainView(
-        name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView) {
+    return PlainView(name, attributesIterable, children, isSelfClosing, tag,
+        sdtView, childrensView, parentView);
   }
 }
 
-class ListView extends View<ListContent> {
-  ListView(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+class ListView extends View<ListContent?> {
+  ListView(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView])
-      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView)
+      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView,
+            childrensView, parentView);
 
-  XmlElement _findFirstChild(XmlElement src, String name) => src
-          .children.isNotEmpty
-      ? src.children.firstWhere((e) => e is XmlElement && e.name.local == name,
-          orElse: () => null)
-      : null;
+  XmlElement? _findFirstChild(XmlElement src, String name) =>
+      src.children.isNotEmpty
+          ? src.children.firstWhereOrNull(
+              (e) => e is XmlElement && e.name.local == name) as XmlElement?
+          : null;
 
-  XmlElement _getNumIdNode(XmlElement list) {
+  XmlElement? _getNumIdNode(XmlElement list) {
     if (list.children.isNotEmpty) {
       final e = list.children.first;
       if (e is XmlElement) {
@@ -275,11 +231,14 @@ class ListView extends View<ListContent> {
     final numId = _getNumIdNode(list);
     if (numId != null) {
       final idNode = numId.getAttributeNode('val', namespace: '*');
-      if (vm.numbering != null) {
-        final newId = vm.numbering.copy(idNode.value);
-        return newId;
-      } else {
-        return idNode.value;
+      if (idNode != null) {
+        final val = idNode.value;
+        if (vm.numbering != null) {
+          final newId = vm.numbering!.copy(val);
+          return newId;
+        } else {
+          return val;
+        }
       }
     }
     return '';
@@ -295,7 +254,7 @@ class ListView extends View<ListContent> {
   }
 
   @override
-  List<XmlElement> produce(ViewManager vm, ListContent c) {
+  List<XmlElement> produce(ViewManager vm, ListContent? c) {
     List<XmlElement> l = [];
     if (c == null) {
       if (vm._viewStack.length >= 2 && vm._viewStack.elementAt(1) is RowView) {
@@ -328,136 +287,172 @@ class ListView extends View<ListContent> {
       /*  */
     } else {
       final vs = vm._viewStack;
-      String newNumId;
+      String newNumId = '';
       if (vs.any((element) => element is PlainView || element is RowView)) {
         newNumId = _getNewNumId(vm, this);
       }
       for (var cont in c.list) {
-        XmlElement copy = this.accept(vm._copyVisitor);
+        View copy = XmlCopyVisitor().visitElement(this) as View;
 
-        if (newNumId != null &&
+        if (newNumId.isNotEmpty &&
             vs.any((element) => element is PlainView || element is RowView)) {
           _changeListId(copy, newNumId);
         }
 
-        var views = View.subViews(copy);
-        for (var v in views) {
+        for (var v in copy.childrensView) {
           vm._produceInner(cont, v);
         }
-        if (copy.children != null) {
-          l.addAll(copy.children.cast<XmlElement>());
-        }
+
+        l.addAll(copy.children.cast<XmlElement>());
       }
     }
     return l;
   }
 
   @override
-  ListView createNew(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  ListView createNew(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView]) {
-    return ListView(
-        name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView) {
+    return ListView(name, attributesIterable, children, isSelfClosing, tag,
+        sdtView, childrensView, parentView);
   }
 }
 
-class RowView extends View<TableContent> {
-  RowView(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+class RowView extends View<TableContent?> {
+  RowView(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView])
-      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView sdtView,
+      List<View> childrensView,
+      View? parentView)
+      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView,
+            childrensView, parentView);
 
   @override
-  List<XmlElement> produce(ViewManager vm, TableContent c) {
+  List<XmlElement> produce(ViewManager vm, TableContent? c) {
     List<XmlElement> l = [];
 
     if (c == null) {
-      XmlElement copy = this.accept(vm._copyVisitor);
+      XmlElement copy = XmlCopyVisitor().visitElement(this)!;
       l = List.from(copy.children);
     } else {
       for (var cont in c.rows) {
-        XmlElement copy = this.accept(vm._copyVisitor);
-        var views = View.subViews(copy);
-        for (var v in views) {
+        View copy = XmlCopyVisitor().visitElement(this) as View;
+        for (var v in copy.childrensView) {
           vm._produceInner(cont, v);
         }
-        if (copy.children != null) {
-          l.addAll(copy.children.cast<XmlElement>());
-        }
+        l.addAll(copy.children.cast<XmlElement>());
       }
     }
     return l;
   }
 
   @override
-  RowView createNew(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  RowView createNew(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView]) {
-    return RowView(
-        name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView) {
+    return RowView(name, attributesIterable, children, isSelfClosing, tag,
+        sdtView!, childrensView, parentView);
   }
 }
 
-class ImgView extends View<ImageContent> {
-  ImgView(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+class ImgView extends View<ImageContent?> {
+  ImgView(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView])
-      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView)
+      : super(name, attributesIterable, children, isSelfClosing, tag, sdtView,
+            childrensView, parentView);
 
   @override
-  List<XmlElement> produce(ViewManager vm, ImageContent c) {
+  List<XmlElement> produce(ViewManager vm, ImageContent? c) {
     List<XmlElement> l = [];
-    XmlElement copy = this.accept(vm._copyVisitor);
+    XmlElement copy = XmlCopyVisitor().visitElement(this) as View;
     l = List.from(copy.children);
     if (c != null) {
-      final pr = copy.descendants.firstWhere(
-          (e) => e is XmlElement && e.name.local == 'blip',
-          orElse: () => null);
+      final pr = copy.descendants
+          .firstWhereOrNull((e) => e is XmlElement && e.name.local == 'blip');
       if (pr != null) {
         final idAttr = pr.getAttribute('r:embed');
 
-        final docRels = vm.docxManager
-            .getEntry(() => DocxRelsEntry(), 'word/_rels/document.xml.rels');
-        if (docRels != null) {
-          final rel = docRels.getRel(idAttr);
-          if (rel != null) {
-            final base = path.basename(rel.target);
-            final ext = path.extension(base);
-            final imageId = docRels.nextImageId();
-            rel.target =
-                path.join(path.dirname(rel.target), 'image$imageId$ext');
-            final imagePath = 'word/${rel.target}';
-            final relId = docRels.nextId();
-            pr.setAttribute('r:embed', relId);
-            docRels.add(relId, rel);
-            vm.docxManager.add(imagePath, DocxBinEntry(c.img));
+        final listDocRelEntry = <DocxRelsEntry?>[
+          vm.docxManager
+              .getEntry(() => DocxRelsEntry(), 'word/_rels/document.xml.rels'),
+          ...vm.docxManager.arch.map((file) {
+            if (file.name.contains("header") && file.name.contains(".rels")) {
+              return vm.docxManager.getEntry(() => DocxRelsEntry(),
+                  'word/_rels/${file.name.split('/').last}');
+            }
+          }).where((element) => element != null),
+          ...vm.docxManager.arch.map((file) {
+            if (file.name.contains("footer") && file.name.contains(".rels")) {
+              return vm.docxManager.getEntry(() => DocxRelsEntry(),
+                  'word/_rels/${file.name.split('/').last}');
+            }
+          }).where((element) => element != null),
+        ];
+
+        listDocRelEntry.forEach((relsEntry) {
+          if (idAttr != null && relsEntry != null) {
+            final rel = relsEntry.getRel(idAttr);
+            if (rel != null) {
+              final base = path.basename(rel.target);
+              final ext = path.extension(base);
+              final imageId = relsEntry.nextImageId();
+
+              rel.target =
+                  path.join(path.dirname(rel.target), 'image$imageId$ext');
+              final imagePath = 'word/${rel.target}';
+              final relId = relsEntry.nextId();
+              pr.setAttribute('r:embed', relId);
+              relsEntry.add(relId, rel);
+
+              vm.docxManager.add(imagePath, DocxBinEntry(c.img));
+            }
           }
-        }
+        });
+      }
+    } else if (vm.imagePolicy == ImagePolicy.remove){
+      final drawing = copy.descendants
+          .firstWhereOrNull((e) => e is XmlElement && e.name.local == 'drawing');
+      if (drawing != null ) {
+        drawing.parent!.children.remove(drawing);
       }
     }
     return l;
   }
 
   @override
-  ImgView createNew(XmlName name,
-      [Iterable<XmlAttribute> attributesIterable = const [],
-      Iterable<XmlNode> children = const [],
-      bool isSelfClosing = true,
+  ImgView createNew(
+      XmlName name,
+      Iterable<XmlAttribute> attributesIterable,
+      Iterable<XmlNode> children,
+      bool isSelfClosing,
       String tag,
-      SdtView sdtView]) {
-    return ImgView(
-        name, attributesIterable, children, isSelfClosing, tag, sdtView);
+      SdtView? sdtView,
+      List<View> childrensView,
+      View? parentView) {
+    return ImgView(name, attributesIterable, children, isSelfClosing, tag,
+        sdtView, childrensView, parentView);
   }
 }

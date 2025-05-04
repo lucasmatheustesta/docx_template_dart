@@ -1,18 +1,16 @@
 import 'dart:collection';
 
-import 'dart:typed_data';
-
 ///
 /// Root content element, use method add() to add inner contents
 ///
 class Content extends MapBase<String, Content> {
   String key;
-  Map<String, Content> sub;
-  Content([this.key, this.sub]);
+  Map<String, Content> sub = {};
+  Content([this.key = '', Map<String, Content>? sub]) : sub = sub ?? {};
 
   @override
-  Content operator [](Object key) {
-    return sub[key];
+  Content? operator [](Object? key) {
+    return sub[key as String];
   }
 
   @override
@@ -29,14 +27,11 @@ class Content extends MapBase<String, Content> {
   Iterable<String> get keys => sub.keys;
 
   @override
-  Content remove(Object key) {
+  Content? remove(Object? key) {
     return sub.remove(key);
   }
 
   add(Content c) {
-    if (sub == null) {
-      sub = Map();
-    }
     sub[c.key] = c;
   }
 
@@ -57,8 +52,24 @@ class PlainContent extends Content {
 }
 
 class TextContent extends Content {
-  String text;
+  late String text;
   TextContent(String key, dynamic text) : super(key, {}) {
+    if (text is String) {
+      this.text = text;
+    } else {
+      this.text = text.toString();
+    }
+  }
+}
+
+class HyperlinkContent extends TextContent {
+  late String text;
+  final String url;
+  HyperlinkContent({
+    required String key,
+    required dynamic text,
+    required this.url,
+  }) : super(key, {}) {
     if (text is String) {
       this.text = text;
     } else {
@@ -76,19 +87,17 @@ class TableContent extends Content {
   List<RowContent> rows;
   TableContent(String key, this.rows) : super(key, {});
   addRow(RowContent content) {
-    if (rows == null) {
-      rows = List();
-    }
     rows.add(content);
   }
 }
 
 class RowContent extends Content {
-  RowContent([Map<String, Content> cols]) : super("", cols);
+  RowContent([Map<String, Content>? cols]) : super("", cols ?? {});
 }
 
 class ImageContent extends Content {
-  List<int> img;
-  String filename;
+  List<int>? img;
+  bool removeFromTemplate = false;
+  String? filename;
   ImageContent(String key, this.img) : super(key, {});
 }

@@ -89,7 +89,7 @@ class DocxTemplate {
   ///
   Future<List<int>?> generate(Content c,
       {TagPolicy tagPolicy = TagPolicy.saveText,
-      ImagePolicy imagePolicy = ImagePolicy.save}) async {
+      ImagePolicy imagePolicy = ImagePolicy.remove}) async {
     final vm = ViewManager.attach(_manager,
         tagPolicy: tagPolicy, imgPolicy: imagePolicy);
     vm.produce(c);

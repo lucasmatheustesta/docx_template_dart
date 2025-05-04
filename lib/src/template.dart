@@ -86,6 +86,7 @@ class DocxTemplate {
 
   ///
   /// Generates byte buffer with docx file content by given [c]
+  /// Sanity Check
   ///
   Future<List<int>?> generate(Content c,
       {TagPolicy tagPolicy = TagPolicy.saveText,
